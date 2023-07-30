@@ -1,6 +1,8 @@
 import { WebClient } from "@slack/web-api"
 import { envVar } from "./EnvVarManager"
 import readline from "readline"
+import { writeFileSync } from "fs"
+import { ParsedMessage, parseMessage } from "./parseMessage"
 
 async function main() {
   const rl = readline.createInterface({
@@ -17,6 +19,7 @@ async function main() {
   let cursor: string | null = null
   let hasMore = true
 
+  const allMessages: ParsedMessage[][] = []
   while (hasMore) {
     const result = await slack.conversations.history({
       channel: channelId,
@@ -36,19 +39,25 @@ async function main() {
     cursor = response_metadata.next_cursor || null
     for (const msg of filtered) {
       if (msg.ts) {
-        await fetchReplies(channelId, msg.ts)
+        const results = await fetchReplies(channelId, msg.ts)
+        allMessages.push(results)
       }
     }
   }
+  console.log(allMessages)
+  writeFileSync("out.txt", allMessages.flat().map((msg) => {
+    return `${msg.ts}\n${msg.textToIndex}`
+  }).join("\n====================\n"))
+
   process.exit(0)
 }
 
 
-async function fetchReplies(channelId: string, ts: string) {
+async function fetchReplies(channelId: string, ts: string): Promise<ParsedMessage[]> {
   const client = new WebClient(envVar.slackBotToken())
   let cursor: string | null = null;
   let hasMore = true
-  const totalResults: { id: string, text: string, postedAt: number, postedBy: string }[] = []
+  const parsedMessages: ParsedMessage[] = []
   while (hasMore) {
     const result = await client.conversations.replies({
       channel: channelId,
@@ -66,10 +75,7 @@ async function fetchReplies(channelId: string, ts: string) {
       return msg.type === "message"
     })
     for (const msg of filtered) {
-      if (msg.files) {
-        console.log(msg)
-      }
-      const { text, ts, user, thread_ts } = msg
+      const { text, ts, user } = msg
       if (
         text === undefined ||
         ts === undefined ||
@@ -77,18 +83,12 @@ async function fetchReplies(channelId: string, ts: string) {
       ) {
         continue
       }
-      const id = `${channelId}${thread_ts ? `:${thread_ts}` : ""}:${ts}`
-      totalResults.push({
-        id,
-        text,
-        postedAt: Number(thread_ts || ts) * 1000,
-        postedBy: user,
-      })
+      parsedMessages.push(parseMessage(msg))
     }
     hasMore = !!has_more
     cursor = response_metadata.next_cursor || null
   }
-  return totalResults
+  return parsedMessages
 }
 
 main()

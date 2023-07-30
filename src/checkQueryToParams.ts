@@ -1,7 +1,7 @@
 import readline from "readline"
-import { extractUrls } from "./indexer/extractUrls"
+import { textToSearchParameters } from "./textToSearchParameters"
 
-;(async () => {
+async function main () {
   const rl = readline.createInterface({
     input: process.stdin,
     output: process.stdout
@@ -12,7 +12,9 @@ import { extractUrls } from "./indexer/extractUrls"
         resolve(input)
       })
     })
-    const args = await extractUrls(text)
+    const args = await textToSearchParameters(text)
     console.log(args)
   }
-})()
+}
+
+main()

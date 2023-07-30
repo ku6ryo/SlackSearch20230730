@@ -4,6 +4,7 @@ import readline from "readline"
 import { randomUUID } from "crypto"
 import { QdrantClient } from "@qdrant/js-client-rest"
 import { getEmbedding } from "./openai"
+import { ParsedMessage, parseMessage } from "./parseMessage"
 
 async function main() {
   const rl = readline.createInterface({
@@ -59,8 +60,8 @@ async function main() {
       if (msg.ts) {
         const results = await fetchReplies(channelId, msg.ts)
         for (const r of results) {
-          const { text, postedAt, postedBy, id } = r
-          const { vector } = await getEmbedding(text)
+          const { textToIndex, postedAt, postedBy, ts, sharedWith } = r
+          const { vector } = await getEmbedding(textToIndex)
           await qdrant.upsert(indexId, {
             wait: true,
             points: [
@@ -68,10 +69,11 @@ async function main() {
                 id: randomUUID(),
                 vector,
                 payload: {
-                  resourceId: id,
-                  text,
+                  resourceId: ts,
+                  text: textToIndex,
                   postedAt,
                   postedBy,
+                  sharedWith,
                 },
               },
             ],
@@ -89,7 +91,7 @@ async function fetchReplies(channelId: string, ts: string) {
   const client = new WebClient(envVar.slackBotToken())
   let cursor: string | null = null;
   let hasMore = true
-  const totalResults: { id: string, text: string, postedAt: number, postedBy: string }[] = []
+  const totalResults: ParsedMessage[] = []
   while (hasMore) {
     const result = await client.conversations.replies({
       channel: channelId,
@@ -107,7 +109,7 @@ async function fetchReplies(channelId: string, ts: string) {
       return msg.type === "message"
     })
     for (const msg of filtered) {
-      const { text, ts, user, thread_ts, files } = msg
+      const { text, ts, user } = msg
       if (
         text === undefined ||
         ts === undefined ||
@@ -115,25 +117,8 @@ async function fetchReplies(channelId: string, ts: string) {
       ) {
         continue
       }
-      let modifiedText = text
-      let fileDescription = ""
-      if (files) {
-        for (const file of files) {
-          if (file.url_private) {
-            fileDescription += file.title + "\n"
-            fileDescription += file.url_private + "\n"
-            fileDescription += "\n"
-          }
-        }
-      }
-      modifiedText += fileDescription
-      const id = `${channelId}${thread_ts ? `:${thread_ts}` : ""}:${ts}`
-      totalResults.push({
-        id,
-        text: modifiedText,
-        postedAt: Number(ts) * 1000,
-        postedBy: user,
-      })
+      const m = parseMessage(msg)
+      totalResults.push(m)
     }
     hasMore = !!has_more
     cursor = response_metadata.next_cursor || null

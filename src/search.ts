@@ -3,7 +3,7 @@ import { envVar } from "./EnvVarManager"
 import readline from "readline"
 import { QdrantClient } from "@qdrant/js-client-rest";
 import { getEmbedding } from "./openai";
-import { textToSearchParameters } from "./search/textToSearchParameters";
+import { textToSearchParameters } from "./textToSearchParameters";
 
 async function main() {
   const rl = readline.createInterface({
@@ -30,16 +30,17 @@ async function main() {
     let from: number | null  = null
     let to: number | null = null
     let postedBy: string | null = null
+    let sharedWith: string | null = null
     if (funcArgs) {
       if (funcArgs.whatToSearch) {
         searchText = funcArgs.whatToSearch
       }
-      if (funcArgs.sharedAt) {
-        if (funcArgs.sharedAt.from) {
-          from = new Date(funcArgs.sharedAt.from).getTime()
+      if (funcArgs.postedAt) {
+        if (funcArgs.postedAt.from) {
+          from = new Date(funcArgs.postedAt.from).getTime()
         }
-        if (funcArgs.sharedAt.to) {
-          to = new Date(funcArgs.sharedAt.to).getTime()
+        if (funcArgs.postedAt.to) {
+          to = new Date(funcArgs.postedAt.to).getTime()
         }
         if (from !== null && to !== null) {
           from -= (from - to) * 0.1
@@ -50,8 +51,11 @@ async function main() {
           to += 1000 * 60 * 60 * 24 * 7
         }
       }
-      if (funcArgs.sharedBy) {
-        postedBy = funcArgs.sharedBy
+      if (funcArgs.postedBy) {
+        postedBy = funcArgs.postedBy
+      }
+      if (funcArgs.sharedWith) {
+        sharedWith = funcArgs.sharedWith
       }
     }
     const conditions: any[] = []
@@ -72,6 +76,14 @@ async function main() {
         }
       })
     }
+    if (sharedWith) {
+      conditions.push({
+        key: "sharedWith",
+        match: {
+          value: sharedWith,
+        }
+      })
+    }
     console.log(conditions)
     const { vector } = await getEmbedding(searchText)
     const results = await qdrant.search(indexId, {
@@ -86,6 +98,7 @@ async function main() {
       const { text, resourceId } = res.payload as { resourceId: string, text: string }
       console.log("====================================")
       console.log(`${i}: ${resourceId}`)
+      console.log(text)
       const match = text.match(/https?:\/\/[^\s|>]+/g)
       if (match) {
         for (let i = 0; i < match.length; i++) {
