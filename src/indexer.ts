@@ -22,13 +22,6 @@ async function main() {
       distance: "Cosine",
     }
   })
-  /*
-  await qdrant.createPayloadIndex(indexId, {
-    field_name: "url",
-    field_schema: "keyword",
-    wait: true,
-  })
-  */
   const channelId = await new Promise<string>((resolve) => {
     rl.question("Channel ID: ", function(input) {
       resolve(input)
