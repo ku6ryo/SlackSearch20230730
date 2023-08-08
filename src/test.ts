@@ -1,4 +1,4 @@
-import { textToSearchParameters } from "./search/textToSearchParameters"
+import { textToSearchParameters } from "./textToSearchParameters"
 
 const questions = [
   "経営ミーティングの資料を探して",
